@@ -1,21 +1,16 @@
-const TelegramBot = require('node-telegram-bot-api')
-const {token, proxy} = require("./basic-data");
-const {HttpsProxyAgent} = require("https-proxy-agent");
+import TelegramBot from 'node-telegram-bot-api';
+import {HttpsProxyAgent} from "https-proxy-agent";
+import {telegram} from "./config.js";
 
 
-const agent = new HttpsProxyAgent(proxy)
+const agent = new HttpsProxyAgent(telegram.proxy);
 
-const bot = new TelegramBot(token, {
-  polling: {
-    interval: 1000,      // 拉取间隔
-    autoStart: true,     // 启动时立即开始
-    params: {
-      timeout: 10        // 长轮询超时
-    }
-  },
+const bot = new TelegramBot(telegram.token, {
+  polling: telegram.polling.enabled,
   request: {
-    agent: agent
+    proxy: telegram.proxy,
+    httpsAgent: agent
   }
 })
 
-module.exports = bot
+export default bot;

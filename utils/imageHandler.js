@@ -1,20 +1,19 @@
-const bot = require('../bot.config');
-const sharp = require('sharp')
-const request = require('./request')
-const ffmpeg = require('fluent-ffmpeg')
-const {PassThrough} = require("node:stream");
-const JSZip = require('jszip')
-const fs = require("node:fs");
+import bot from '../bot.config.js';
+import sharp from 'sharp';
+import request from './request.js';
+import ffmpeg from 'fluent-ffmpeg';
+import {PassThrough} from "node:stream";
+import JSZip from 'jszip';
+import fs from "node:fs";
+import pLimit from 'p-limit';
+import zlib from 'zlib';
+import {imageProcessing} from '../config.js';
 
-
-
-const pLimit = require("p-limit").default
-const limit = pLimit(5)
-
+const limit = pLimit(imageProcessing.concurrencyLimit);
 
 async function downloadFileBuffer(fileUrl){
-    const res = await request.get(fileUrl)
-    return Buffer.from(res.data)
+    const res = await request.get(fileUrl);
+    return Buffer.from(res.data);
 }
 
 //webm -> gif
@@ -33,7 +32,7 @@ async function convertWebmBufferToGifBuffer(webmBuffer) {
         ffmpeg(inputStream)
             .inputFormat('webm')
             .videoFilters([
-                'fps=30,scale=512:-1:flags=lanczos'  // 提高到 30fps + 高质量缩放
+                `fps=${imageProcessing.gif.fps},scale=${imageProcessing.gif.scale}:flags=${imageProcessing.gif.quality}`
             ])
             .outputOptions([
                 '-loop', '0',           // 不循环
@@ -46,13 +45,10 @@ async function convertWebmBufferToGifBuffer(webmBuffer) {
     });
 }
 
-
-
-
 //.tgs -> gif
 async function convertTgsToGifBuffer(tgsBuffer) {
     // 1️⃣ 解压 tgs
-    const lottieJson = JSON.parse(require('zlib').gunzipSync(tgsBuffer));
+    const lottieJson = JSON.parse(zlib.gunzipSync(tgsBuffer));
 
     // 2️⃣ 渲染每一帧
     const frames = [];
@@ -86,6 +82,7 @@ async function convertTgsToGifBuffer(tgsBuffer) {
             .on('error', reject);
     });
 }
+
 async function convertWebpBufferToPngBuffer(webpBuffer) {
     return await sharp(webpBuffer).png({
         compressionLevel: 0, // 禁用 zlib 压缩
@@ -94,45 +91,42 @@ async function convertWebpBufferToPngBuffer(webpBuffer) {
     }).toBuffer();
 }
 
-
 async function downloadAndConvertSticker(sticker) {
-    const {file_id: fileId} = sticker
-    const file = await bot.getFile(fileId)
-    const fileUrl = `https://api.telegram.org/file/bot${bot.token}/${file.file_path}`
-    console.log(fileUrl)
-    const buffer = await downloadFileBuffer(fileUrl)
+    const {file_id: fileId} = sticker;
+    const file = await bot.getFile(fileId);
+    const fileUrl = `https://api.telegram.org/file/bot${bot.token}/${file.file_path}`;
+    console.log(fileUrl);
+    const buffer = await downloadFileBuffer(fileUrl);
 
     if (sticker.is_animated || sticker.is_video) {
         const gifBuffer = await convertWebmBufferToGifBuffer(buffer);
-        return { buffer: gifBuffer, type: 'animation', mime: 'image/gif',filename:`${fileId}.gif`};
+        return { buffer: gifBuffer, type: 'animation', mime: 'image/gif', filename:`${fileId}.gif`};
     } else {
         const pngBuffer = await convertWebpBufferToPngBuffer(buffer);
         // fs.writeFileSync(`${fileId}.png`, pngBuffer)
-        return { buffer: pngBuffer, type: 'photo', mime: 'image/png',filename:`${fileId}.png` };
+        return { buffer: pngBuffer, type: 'photo', mime: 'image/png', filename:`${fileId}.png` };
     }
 }
 
-
 //zip
 async function downloadWholeStickers(stickers){
-    const zip = new JSZip()
+    const zip = new JSZip();
     const fnArr = stickers.map((sticker) =>
         limit(() =>
             downloadAndConvertSticker(sticker)
-                .then(res => zip.file(res.filename,res.buffer))
+                .then(res => zip.file(res.filename, res.buffer))
                 .catch(()=>{})
         )
-    )
-    await Promise.allSettled(fnArr)
-    const res =await zip.generateAsync({type:'nodebuffer'})
-    return res
+    );
+    await Promise.allSettled(fnArr);
+    const res = await zip.generateAsync({type:'nodebuffer'});
+    return res;
 }
 
-
-module.exports = {
+export {
     downloadAndConvertSticker,
     downloadWholeStickers
-}
+};
 
 
 

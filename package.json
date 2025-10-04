@@ -2,6 +2,7 @@
   "name": "telegrambot",
   "version": "1.0.0",
   "description": "",
+  "type": "module",
   "main": "bot.config.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

@@ -1,16 +1,16 @@
-const axios = require('axios')
-const {HttpsProxyAgent} = require("https-proxy-agent");
-const {proxy} = require("../basic-data");
+import axios from 'axios';
+import {HttpsProxyAgent} from "https-proxy-agent";
+import {http} from "../config.js";
 
-const agent = new HttpsProxyAgent(proxy)
+const agent = new HttpsProxyAgent(http.proxy)
 
 const request = axios.create({
-    httpAgent:agent,
-    httpsAgent:agent,
-    responseType:'arraybuffer'
+    httpAgent: agent,
+    httpsAgent: agent,
+    responseType: 'arraybuffer'
 })
 
-module.exports = request
+export default request;
 
 
 

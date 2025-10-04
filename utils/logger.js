@@ -1,6 +1,6 @@
 // logger.js
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 
 class Logger {
     constructor(logPath = './logs') {
@@ -51,4 +51,4 @@ class Logger {
     }
 }
 
-module.exports = new Logger();
+export default new Logger();

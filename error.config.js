@@ -1,4 +1,4 @@
-const logger = require('./utils/logger')
+import logger from './utils/logger.js';
 
 process.on('uncaughtException', (err) => {
    logger.error(err)

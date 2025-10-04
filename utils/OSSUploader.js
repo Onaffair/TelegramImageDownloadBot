@@ -1,21 +1,19 @@
-const accessKeyId = process.env.ALIYUN_ACCESSKEY_ID
-const accessKeySecret = process.env.ALIYUN_ACCESSKEY_SECRET
-const OSS = require('ali-oss')
-const {resolve} = require("ali-oss/shims/url");
-const uploadDir = "ZIP"
-const ext = 'zip'
+import OSS from 'ali-oss';
+import {aliOSS} from '../config.js';
+const uploadDir = aliOSS.uploadDir;
+const ext = aliOSS.fileExt;
 
 const client = new OSS({
-    region:'oss-cn-hangzhou',
-    accessKeyId,
-    accessKeySecret,
-    bucket:'onaffair'
+    region: aliOSS.region,
+    accessKeyId: aliOSS.accessKeyId,
+    accessKeySecret: aliOSS.accessKeySecret,
+    bucket: aliOSS.bucket
 })
-const baseUrl = 'http://onaffair.oss-cn-hangzhou.aliyuncs.com'
+const baseUrl = aliOSS.baseUrl
 async function isExistInOSS(packName){
     const objKey = `${uploadDir}/${packName}.${ext}`
     try {
-        const res = await client.head(objKey)
+        await client.head(objKey)
         return  `${baseUrl}/${objKey}`
     }catch (e){
         return false
@@ -29,6 +27,9 @@ async function uploadZIP(buffer,packName){
     return res.url
 }
 
-module.exports = {uploadZIP,isExistInOSS}
+export {
+    uploadZIP,
+    isExistInOSS
+};
 
 

@@ -1,6 +1,6 @@
-const bot = require('./bot.config')
-const {downloadAndConvertSticker,downloadWholeStickers} = require("./utils/imageHandler");
-const {uploadZIP, isExistInOSS} = require("./utils/OSSUploader");
+import bot from './bot.config.js';
+import {downloadAndConvertSticker, downloadWholeStickers} from "./utils/imageHandler.js";
+import {uploadZIP, isExistInOSS} from "./utils/OSSUploader.js";
 
 bot.onText(/\/start/,(msg) =>{
     const chatId = msg.chat.id
