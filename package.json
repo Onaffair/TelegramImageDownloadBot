@@ -1,0 +1,22 @@
+{
+  "name": "telegrambot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "bot.config.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "ali-oss": "^6.23.0",
+    "axios": "^1.12.2",
+    "fluent-ffmpeg": "^2.1.3",
+    "https-proxy-agent": "^7.0.6",
+    "jszip": "^3.10.1",
+    "node-telegram-bot-api": "^0.66.0",
+    "p-limit": "^7.1.1",
+    "sharp": "^0.34.4"
+  }
+}
