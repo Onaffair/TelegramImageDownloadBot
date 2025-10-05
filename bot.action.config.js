@@ -13,7 +13,6 @@ bot.on('message',async (msg) =>{
     try {
         bot.sendMessage(chatId,'bot正在开发中。。。。。\n' +
             '功能尚未完善')
-
         if (msg.text == '/start') return
         if (!msg.sticker && !msg.link_preview_options){
             bot.sendMessage(chatId,'请发送贴图或贴图分享的链接')

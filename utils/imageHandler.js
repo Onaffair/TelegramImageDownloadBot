@@ -4,12 +4,17 @@ import request from './request.js';
 import ffmpeg from 'fluent-ffmpeg';
 import {PassThrough} from "node:stream";
 import JSZip from 'jszip';
-import fs from "node:fs";
-import pLimit from 'p-limit';
-import zlib from 'zlib';
 import {imageProcessing} from '../config.js';
 
+import gzipPkg from 'node-gzip'
+const {ungzip} = gzipPkg
+
+
+import pLimit from 'p-limit';
 const limit = pLimit(imageProcessing.concurrencyLimit);
+
+
+ffmpeg.setFfmpegPath('D:\\ffmpeg\\bin\\ffmpeg.exe')
 
 async function downloadFileBuffer(fileUrl){
     const res = await request.get(fileUrl);
@@ -32,52 +37,94 @@ async function convertWebmBufferToGifBuffer(webmBuffer) {
         ffmpeg(inputStream)
             .inputFormat('webm')
             .videoFilters([
-                `fps=${imageProcessing.gif.fps},scale=${imageProcessing.gif.scale}:flags=${imageProcessing.gif.quality}`
+                // 调整帧率并保持时长
+                `fps=${imageProcessing.gif.fps},scale=${imageProcessing.gif.scale}:flags=${imageProcessing.gif.quality},setpts=PTS*(${60 / imageProcessing.gif.fps})`
             ])
             .outputOptions([
-                '-loop', '0',           // 不循环
-                '-gifflags', '+transdiff', // 改善透明边缘
-                '-lossless', '1'        // 尽可能无损
+                '-loop', '0',
+                '-gifflags', '+transdiff',
+                '-lossless', '1'
             ])
             .outputFormat('gif')
             .pipe(outputStream, { end: true })
             .on('error', reject);
+
     });
 }
 
-//.tgs -> gif
-async function convertTgsToGifBuffer(tgsBuffer) {
-    // 1️⃣ 解压 tgs
-    const lottieJson = JSON.parse(zlib.gunzipSync(tgsBuffer));
+/**
+ * 1️⃣ 将 tgsBuffer 转成 WebM buffer
+ */
+async function convertTgsBufferToWebmBuffer(tgsBuffer) {
+    // 1️⃣ 解压 tgs -> Lottie JSON
+    const jsonBuffer = await ungzip(tgsBuffer);
+    const lottieJson = JSON.parse(jsonBuffer.toString('utf-8'));
 
-    // 2️⃣ 渲染每一帧
-    const frames = [];
-    const width = 512;
-    const height = 512;
-    for (let i = 0; i < totalFrames; i++) {
-        const canvas = createCanvas(width, height);
-        const ctx = canvas.getContext('2d');
-        renderLottieFrame(lottieJson, i, ctx); // 伪函数
-        frames.push(canvas.toBuffer('image/png'));
-    }
+    // 2️⃣ 启动 puppeteer 渲染 Lottie
+    const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
+    const page = await browser.newPage();
 
-    // 3️⃣ 用 ffmpeg 把 PNG 帧生成 GIF
+    await page.setContent(`
+        <html>
+        <body style="margin:0; padding:0; overflow:hidden;">
+            <canvas id="canvas"></canvas>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.11.3/lottie.min.js"></script>
+            <script>
+                window.lottieJson = ${JSON.stringify(lottieJson)};
+            </script>
+        </body>
+        </html>
+    `);
+
+    const frames = await page.evaluate(async () => {
+        const canvas = document.getElementById('canvas');
+        const anim = lottie.loadAnimation({
+            container: canvas,
+            renderer: 'canvas',
+            loop: false,
+            autoplay: true,
+            animationData: window.lottieJson
+        });
+
+        const frameCount = anim.totalFrames;
+        const fps = 30; // 可根据需要调整
+        const capturedFrames = [];
+
+        anim.goToAndStop(0, true);
+        for (let i = 0; i < frameCount; i++) {
+            anim.goToAndStop(i, true);
+            capturedFrames.push(canvas.toDataURL('image/png'));
+        }
+
+        return capturedFrames;
+    });
+
+    await browser.close();
+
+    // 3️⃣ 将 frames 转为 buffer，并用 ffmpeg 输出 webm
     return new Promise((resolve, reject) => {
         const outputStream = new PassThrough();
         const chunks = [];
-        outputStream.on('data', (chunk) => chunks.push(chunk));
+        outputStream.on('data', chunk => chunks.push(chunk));
         outputStream.on('end', () => resolve(Buffer.concat(chunks)));
         outputStream.on('error', reject);
 
-        const command = ffmpeg();
-        frames.forEach((frame) => {
-            command.input(frame).inputFormat('image2pipe');
+        const ffmpegCommand = ffmpeg();
+
+        frames.forEach((frameDataUrl, i) => {
+            const base64 = frameDataUrl.replace(/^data:image\/png;base64,/, '');
+            const frameBuffer = Buffer.from(base64, 'base64');
+            ffmpegCommand.input(new PassThrough().end(frameBuffer))
+                .inputFormat('image2pipe');
         });
 
-        command
-            .complexFilter(['fps=15,scale=512:-1:flags=lanczos,split [a][b];[a] palettegen=reserve_transparent=1 [p];[b][p] paletteuse'])
-            .outputOptions(['-loop', '0'])
-            .outputFormat('gif')
+        ffmpegCommand
+            .outputOptions([
+                '-c:v libvpx-vp9',
+                `-r 30`,
+                '-pix_fmt yuva420p'
+            ])
+            .format('webm')
             .pipe(outputStream, { end: true })
             .on('error', reject);
     });
@@ -99,7 +146,14 @@ async function downloadAndConvertSticker(sticker) {
     const buffer = await downloadFileBuffer(fileUrl);
 
     if (sticker.is_animated || sticker.is_video) {
-        const gifBuffer = await convertWebmBufferToGifBuffer(buffer);
+        let gifBuffer = null
+        if (file.file_path.endsWith('.tgs')){
+            // gifBuffer  = await convertTgsBufferToWebmBuffer(buffer)
+            // console.log(gifBuffer)
+            throw new Error('暂不支持该类贴图的转换')
+        }else{
+            gifBuffer = await convertWebmBufferToGifBuffer(buffer);
+        }
         return { buffer: gifBuffer, type: 'animation', mime: 'image/gif', filename:`${fileId}.gif`};
     } else {
         const pngBuffer = await convertWebpBufferToPngBuffer(buffer);
