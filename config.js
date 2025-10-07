@@ -26,7 +26,6 @@ const aliOSS = {
     region: 'oss-cn-hangzhou',
     bucket: 'onaffair',
     uploadDir: 'ZIP',
-    fileExt: 'zip',
     baseUrl: 'http://onaffair.oss-cn-hangzhou.aliyuncs.com'
 };
 

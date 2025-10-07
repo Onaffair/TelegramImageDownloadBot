@@ -1,7 +1,7 @@
 import OSS from 'ali-oss';
 import {aliOSS} from '../config.js';
 const uploadDir = aliOSS.uploadDir;
-const ext = aliOSS.fileExt;
+const ext = 'zip'
 
 const client = new OSS({
     region: aliOSS.region,
